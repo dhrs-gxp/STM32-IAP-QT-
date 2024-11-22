@@ -14,8 +14,8 @@ int main(void)
 	__enable_irq();
 	
 	delay_init(168);
-	USART1_Init();
 	LED_Init();
+	USART1_Init();
 	
 	DMA_USART1_Send("Hello from app!\r\n", 17);
 	
@@ -23,6 +23,7 @@ int main(void)
 		
 		if(msgRecvFromUART1 == 1) {
 			DMA_USART1_Send(Uart1_Rx_Buf, strlen(Uart1_Rx_Buf));
+			
 			memset(Uart1_Rx_Buf, 0, UART1_RX_BUF_LEN);
 			DMA_Cmd(DMA2_Stream5, DISABLE);
 			DMA2_Stream5->NDTR = UART1_RX_BUF_LEN;

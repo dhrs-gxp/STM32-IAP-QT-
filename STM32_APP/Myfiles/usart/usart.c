@@ -43,17 +43,16 @@ void UART1_Config(uint32_t bound){
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority =0;			//子优先级0
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;				//IRQ通道使能
 	NVIC_Init(&NVIC_InitStructure);								//根据指定的参数初始化NVIC寄存器
+	USART_ITConfig(USART1, USART_IT_IDLE, ENABLE);	//开启相关中断
 
 	USART_Cmd(USART1, ENABLE);						//使能串口1
-	USART_ITConfig(USART1, USART_IT_IDLE, ENABLE);	//开启相关中断
 	
-	USART_DMACmd(USART1, USART_DMAReq_Tx, ENABLE);	//采用DMA方式接收
-	USART_DMACmd(USART1, USART_DMAReq_Rx, ENABLE);	//采用DMA方式接收
 }
 
 void DMA_UART1_TX_Config(void)
 {
     DMA_InitTypeDef DMA_InitStructure;
+	NVIC_InitTypeDef NVIC_InitStructure;
 	
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_DMA2, ENABLE);	//开启DMA时钟 
     DMA_DeInit(DMA2_Stream7);
@@ -76,12 +75,34 @@ void DMA_UART1_TX_Config(void)
     DMA_InitStructure.DMA_PeripheralBurst = DMA_PeripheralBurst_Single;     //单次传输
     DMA_Init(DMA2_Stream7, &DMA_InitStructure);
 		
+	NVIC_InitStructure.NVIC_IRQChannel                   = DMA2_Stream7_IRQn;           
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;          
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority        = 0; 
+    NVIC_InitStructure.NVIC_IRQChannelCmd                = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+	DMA_ITConfig(DMA2_Stream7, DMA_IT_TC, ENABLE);	//采用满中断(1)
+	DMA_ClearFlag(DMA2_Stream7,DMA_FLAG_TCIF7);		//清除DMA2_Steam7传输完成标志(2)
+	
+	USART_DMACmd(USART1, USART_DMAReq_Tx, ENABLE);	//采用DMA方式接收
 	DMA_Cmd(DMA2_Stream7, DISABLE);					//开启DMA传输 
+}
+
+volatile int DMA2_Stream7_Send_Over = 1;
+
+void DMA2_Stream7_IRQHandler(void)
+{
+	//清除标志
+	if(DMA_GetFlagStatus(DMA2_Stream7, DMA_FLAG_TCIF7) != RESET)//等待DMA2_Steam7传输完成
+	{
+		DMA_ClearFlag(DMA2_Stream7, DMA_FLAG_TCIF7);//清除DMA2_Steam7传输完成标志
+		DMA2_Stream7_Send_Over = 1;
+	}
 }
 
 void DMA_USART1_Send(char *data, uint16_t size)
 {
-	DMA_ClearFlag(DMA2_Stream7, DMA_FLAG_TCIF7);
+	while(DMA2_Stream7_Send_Over == 0);
+	DMA2_Stream7_Send_Over = 0;
 	memcpy(Uart1_Tx_Buf, data, size);					//复制数据到DMA发送缓存区
 	
 	DMA_Cmd(DMA2_Stream7, DISABLE);						//打开DMA数据流，开始发送
@@ -90,13 +111,9 @@ void DMA_USART1_Send(char *data, uint16_t size)
 	DMA_Cmd(DMA2_Stream7, ENABLE);						//打开DMA数据流，开始发送
 }
 
-int isDMASendOver(void) {
-	return DMA_GetFlagStatus(DMA2_Stream7, DMA_FLAG_TCIF7);
-}
 
 void DMA_UART1_RX_Config(void)
 {
-	NVIC_InitTypeDef NVIC_InitStructure;
     DMA_InitTypeDef DMA_InitStructure;
 	
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_DMA2, ENABLE);	//开启DMA时钟 
@@ -119,27 +136,11 @@ void DMA_UART1_RX_Config(void)
     DMA_InitStructure.DMA_MemoryBurst = DMA_MemoryBurst_Single;             //单次传输
     DMA_InitStructure.DMA_PeripheralBurst = DMA_PeripheralBurst_Single;     //单次传输
     DMA_Init(DMA2_Stream5, &DMA_InitStructure);
-    /* 6. 配置DMA中断优先级 */
-    NVIC_InitStructure.NVIC_IRQChannel                   = DMA2_Stream5_IRQn;           
-    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;          
-    NVIC_InitStructure.NVIC_IRQChannelSubPriority        = 1; 
-    NVIC_InitStructure.NVIC_IRQChannelCmd                = ENABLE;
-    NVIC_Init(&NVIC_InitStructure);
-	
-	DMA_ITConfig(DMA2_Stream5, DMA_IT_TC, ENABLE);	//采用满中断(1)
-	DMA_ClearFlag(DMA2_Stream5,DMA_FLAG_TCIF5);		//清除DMA2_Steam5传输完成标志(2)
+
+	USART_DMACmd(USART1, USART_DMAReq_Rx, ENABLE);	//采用DMA方式接收
 	DMA_Cmd(DMA2_Stream5, ENABLE);					//开启DMA传输(3)
 }
 
-
-void DMA2_Stream5_IRQHandler(void)
-{
-	//清除标志
-	if(DMA_GetFlagStatus(DMA2_Stream5, DMA_FLAG_TCIF5) != RESET)//等待DMA2_Steam5传输完成 
-	{
-		DMA_ClearFlag(DMA2_Stream5, DMA_FLAG_TCIF5);//清除DMA2_Steam5传输完成标志
-	}
-}
 
 volatile uint8_t msgRecvFromUART1 = 0;
 void USART1_IRQHandler(void)                	//串口1中断服务程序

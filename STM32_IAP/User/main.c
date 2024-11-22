@@ -23,7 +23,6 @@ int main(void)
 	
 	uint32_t temp = 0;
 	for(int i = 0; i < 6; i++) {
-		while(!isDMASendOver());
 		if(i == 0) DMA_USART1_Send("3", 3);
 		else if(i == 2) DMA_USART1_Send("2", 3);
 		else if(i == 4) DMA_USART1_Send("1", 3);
@@ -45,7 +44,6 @@ int main(void)
 
 	if(BOOT_MODE == 0) jump_to_app(APP_BASE_ADDR);		//如果没有进入固化的功能，则运行app程序
 	
-	while(!isDMASendOver());
 	DMA_USART1_Send("bootloader", 10);
 	
 	while(1) {											//执行固化程序的功能
